@@ -1,6 +1,9 @@
 import asyncio
 import sqlite3
 from datetime import datetime, date, timedelta
+import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from threading import Thread
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
@@ -391,12 +394,43 @@ async def cmd_remind(message: Message, bot: Bot):
 
     await message.answer("Напоминание отправлено ✅")
 
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        # простой ответ "OK" на любой GET
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
 
-async def main():
+def run_http_server():
+    # Render передаёт порт через переменную окружения PORT
+    port = int(os.environ.get("PORT", 8000))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    print(f"HTTP health server running on port {port}")
+    server.serve_forever()
+
+
+
+from aiogram.client.default import DefaultBotProperties  # добавь, если ещё нет
+
+async def run_bot():
     init_db()
-    bot = Bot(BOT_TOKEN, parse_mode="HTML")
+    bot = Bot(
+        token=BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode="HTML")
+    )
+    print("Starting Telegram bot polling...")
     await dp.start_polling(bot)
 
 
+def main():
+    # 1) запускаем HTTP-сервер в отдельном потоке
+    http_thread = Thread(target=run_http_server, daemon=True)
+    http_thread.start()
+
+    # 2) запускаем бота (asyncio)
+    asyncio.run(run_bot())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
+
